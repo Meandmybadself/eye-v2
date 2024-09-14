@@ -7,8 +7,8 @@ const server = http.createServer((req, res) => {
   let filePath = '.' + req.url;
   if (filePath === './') {
     filePath = './display.html';
-  } else if (filePath === './sensor') {
-    filePath = './sensor.html';
+  } else if (filePath === './control') {
+    filePath = './control.html';
   }
 
   const extname = String(path.extname(filePath)).toLowerCase();
