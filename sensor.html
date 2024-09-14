@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Touch Sensor</title>
+    <style>
+        body {
+            margin: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background: #222;
+        }
+        #touchArea {
+            width: 100%;
+            aspect-ratio: 1/1;
+            border: 1px solid #fff;
+            background-color: #333;
+            touch-action: none;
+        }
+    </style>
+</head>
+<body>
+    <div id="touchArea"></div>
+    <script>
+        const touchArea = document.getElementById('touchArea');
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const ws = new WebSocket(`${protocol}//${window.location.host}/sensor`);
+
+        ws.onopen = () => {
+            console.log('Connected to WebSocket server');
+        };
+
+        function handleTouchEvent(event) {
+            event.preventDefault();
+            const touch = event.touches[0];
+            const rect = touchArea.getBoundingClientRect();
+            const x = touch.clientX - rect.left;
+            const y = touch.clientY - rect.top;
+            
+            const message = JSON.stringify({
+                type: event.type,
+                x: x,
+                y: y
+            });
+            
+            ws.send(message);
+        }
+
+        touchArea.addEventListener('touchstart', handleTouchEvent);
+        touchArea.addEventListener('touchmove', handleTouchEvent);
+        touchArea.addEventListener('touchend', handleTouchEvent);
+    </script>
+</body>
+</html>

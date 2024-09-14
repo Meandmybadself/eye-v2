@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <title>Eye</title>
+    <style>
+        body {
+            margin: 0;
+        }
+
+        .eyelid {
+            position: absolute;
+            width: 100%;
+            height: 0;
+            background-color: #000;
+            left: 0;
+            right: 0;
+            z-index: 1;
+            transition: height 0.2s ease-out;
+            transform: translate3d(0, 0, 0);
+            box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
+        }
+
+        .eyelid--closed {
+            height: 50vh;
+        }
+
+        .eyelid--top {
+            transform-origin: top;
+            top: 0;
+        }
+
+        .eyelid--bottom {
+            transform-origin: bottom;
+            bottom: 0;
+        }
+
+        #container {
+            width: 100%;
+            height: 100vh;
+        }
+
+        #checkControllerButton {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+        }
+    </style>
+    <script src="https://unpkg.com/gsap@3.9.1/dist/gsap.min.js"></script>
+    <script type="importmap">
+    {
+      "imports": {
+        "three": "https://unpkg.com/three@0.132.2/build/three.module.js",
+        "three/examples/jsm/loaders/GLTFLoader": "https://unpkg.com/three@0.132.2/examples/jsm/loaders/GLTFLoader.js",
+        "three/examples/jsm/loaders/RGBELoader": "https://unpkg.com/three@0.132.2/examples/jsm/loaders/RGBELoader.js",
+        "three/examples/jsm/utils/RoughnessMipmapper": "https://unpkg.com/three@0.132.2/examples/jsm/utils/RoughnessMipmapper.js"
+      }
+    }
+    </script>
+</head>
+
+<body>
+    <div class="eyelid eyelid--top"></div>
+    <div class="eyelid eyelid--bottom"></div>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader';
+        import { RGBELoader } from 'three/examples/jsm/loaders/RGBELoader';
+        import { RoughnessMipmapper } from 'three/examples/jsm/utils/RoughnessMipmapper';
+
+        let camera, scene, renderer;
+        let eye;
+
+        // WebSocket class
+        class WebSocketClient {
+            
+            constructor() {
+                this.url = `ws://${window.location.host}/consumer`
+                this.ws = null;
+                this.onEventCallback = null;
+                this.onConnectCallback = null;
+                this.onDisconnectCallback = null;
+            }
+
+            connect() {
+                this.ws = new WebSocket(this.url);
+                this.ws.onopen = () => {
+                    if (this.onConnectCallback) {
+                        this.onConnectCallback();
+                    }
+                };
+                this.ws.onmessage = (event) => {
+                    const data = JSON.parse(event.data);
+                    if (this.onEventCallback) {
+                        this.onEventCallback(data);
+                    }
+                };
+                this.ws.onclose = () => {
+                    console.log('Disconnected from WebSocket server');
+                    if (this.onDisconnectCallback) {
+                        this.onDisconnectCallback();
+                    }
+                };
+            }
+
+            disconnect() {
+                if (this.ws) {
+                    this.ws.close();
+                }
+            }
+
+            onEvent(callback) {
+                this.onEventCallback = callback;
+            }
+
+            onConnect(callback) {
+                this.onConnectCallback = callback;
+            }
+
+            onDisconnect(callback) {
+                this.onDisconnectCallback = callback;
+            }
+        }
+
+        // Create WebSocket client
+        const wsClient = new WebSocketClient();
+
+        function init() {
+            const container = document.createElement('div');
+            container.id = 'container';
+            document.body.appendChild(container);
+
+            camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.25, 20);
+            camera.position.set(0, 0, 2.5);
+
+            scene = new THREE.Scene();
+
+            const basePath = `/assets/`;
+
+            new RGBELoader()
+                .load(`${basePath}royal_esplanade_1k.hdr`, function (texture) {
+                    texture.mapping = THREE.EquirectangularReflectionMapping;
+                    scene.environment = texture;
+                    render();
+
+                    const roughnessMipmapper = new RoughnessMipmapper(renderer);
+
+                    const loader = new GLTFLoader()
+                    loader.load(`${basePath}Eye.glb`, function (glb) {
+                        glb.scene.traverse(function (child) {
+                            if (child.isMesh) {
+                                roughnessMipmapper.generateMipmaps(child.material);
+                            }
+                        });
+                        scene.add(glb.scene);
+                        roughnessMipmapper.dispose();
+                        render();
+                        eye = scene.getObjectByName('Eye_Blue_01');
+                    });
+                });
+
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setPixelRatio(window.devicePixelRatio);
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.toneMapping = THREE.ACESFilmicToneMapping;
+            renderer.toneMappingExposure = 2;
+            renderer.outputEncoding = THREE.sRGBEncoding;
+            container.appendChild(renderer.domElement);
+
+            window.addEventListener('resize', onWindowResize);
+
+            // Connect to WebSocket server
+            wsClient.connect();
+
+            // Example usage of WebSocket events
+            wsClient.onConnect(() => {
+                console.log('Connected to WebSocket server');
+            });
+
+            wsClient.onEvent((data) => {
+                if (eye && data.type === 'touchmove') {
+                    const amount = 45;
+                    const x = deg2rad((data.y / 150 - 1) * amount); // Inverted Y axis
+                    const y = deg2rad((data.x / 150 - 1) * amount);
+
+                    gsap.to(eye.rotation, {
+                        duration: 0.4,
+                        x,
+                        y,
+                        ease: "power3.out"
+                    });
+                }
+            });
+
+            wsClient.onDisconnect(() => {
+                console.log('Disconnected from WebSocket server');
+            });
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            render();
+        }
+
+        function render() {
+            requestAnimationFrame(render);
+            renderer.render(scene, camera);
+        }
+
+        function deg2rad(degrees) {
+            return degrees * Math.PI / 180;
+        }
+
+        function blink() {
+            document.querySelectorAll('.eyelid').forEach(el => el.classList.add('eyelid--closed'));
+            setTimeout(() => {
+                document.querySelectorAll('.eyelid').forEach(el => el.classList.remove('eyelid--closed'));
+            }, 200);
+        }
+
+        init();
+        render();
+    </script>
+</body>
+
+</html>
