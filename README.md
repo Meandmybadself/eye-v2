@@ -3,7 +3,7 @@
 ## Introduction
 This is version two of the creepy eyeball – https://meandmybadself.com/projects/eye
 
-This version adds the ability to control the eye with a mobile control UI.
+This version adds the ability to control the eye (or multiple eyes) with a mobile control UI.
 
 ## Usage
 * `pnpm i` / `npm i` to install dependencies
